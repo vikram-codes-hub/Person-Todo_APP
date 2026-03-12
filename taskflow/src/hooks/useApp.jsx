@@ -30,7 +30,7 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     const init = async () => {
       try {
-        await taskAPI.autoMarkMissed()
+       await taskAPI.autoMarkMissed().catch(() => {})
         const data = await taskAPI.getAll()
         setTasks(data)
         setStreak(calcStreak(data))
