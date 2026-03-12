@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { motion, AnimatePresence, Reorder } from 'framer-motion'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion'
 import {
   Plus, Check, X, Clock, CalendarDays, Flame, Pencil,
   GripVertical, ChevronRight, Info
@@ -131,16 +131,16 @@ function QuickAddBar() {
         <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
           className="bg-white dark:bg-gray-900 rounded-2xl border-2 border-orange-400 shadow-xl shadow-orange-100/50 dark:shadow-orange-900/20 overflow-hidden"
         >
-          <div className="px-5 pt-5 pb-3">
+          <div className="px-4 sm:px-5 pt-5 pb-3">
             <input autoFocus value={title} onChange={e => setTitle(e.target.value)} onKeyDown={handleKey}
               placeholder="What do you need to do?"
               className="w-full text-base font-medium text-gray-900 dark:text-white bg-transparent placeholder-gray-400 focus:outline-none"
             />
           </div>
 
-          <div className="px-5 pb-4 border-t border-gray-100 dark:border-gray-800 pt-3 space-y-3">
+          <div className="px-4 sm:px-5 pb-4 border-t border-gray-100 dark:border-gray-800 pt-3 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-gray-400 font-semibold w-16 flex-shrink-0">When:</span>
+              <span className="text-xs text-gray-400 font-semibold w-14 sm:w-16 flex-shrink-0">When:</span>
               <label className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-medium text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-600 transition-colors">
                 <CalendarDays size={12} /> {dateLabel}
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
@@ -151,9 +151,9 @@ function QuickAddBar() {
               </label>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-gray-400 font-semibold w-16 flex-shrink-0">Priority:</span>
-              <div className="flex items-center gap-1.5">
+            <div className="flex items-start gap-2 flex-wrap">
+              <span className="text-xs text-gray-400 font-semibold w-14 sm:w-16 flex-shrink-0 pt-1.5">Priority:</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {PRIORITIES.map(p => (
                   <button key={p} onClick={() => setPriority(p)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
@@ -165,8 +165,8 @@ function QuickAddBar() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-gray-400 font-semibold w-16 flex-shrink-0">Category:</span>
+            <div className="flex items-start gap-2 flex-wrap">
+              <span className="text-xs text-gray-400 font-semibold w-14 sm:w-16 flex-shrink-0 pt-1.5">Category:</span>
               <div className="flex items-center gap-1.5 flex-wrap">
                 {CATEGORIES.map(c => (
                   <button key={c} onClick={() => setCategory(c)}
@@ -195,11 +195,14 @@ function QuickAddBar() {
   )
 }
 
-// ── Task Row ───────────────────────────────────────────────
+// ── Draggable Task Row ─────────────────────────────────────
+// Key fix: dragControls lets the grip handle initiate drag,
+// while the rest of the card remains clickable.
 function TaskRow({ task, showDate = false }) {
   const { toggleComplete, deleteTask, setEditingTask, updateTask } = useApp()
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [confirmDelete,  setConfirmDelete]  = useState(false)
+  const dragControls = useDragControls()
 
   const priCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.Medium
   const catCfg = CATEGORY_CONFIG[task.category] || CATEGORY_CONFIG.Other
@@ -220,20 +223,37 @@ function TaskRow({ task, showDate = false }) {
   return (
     <Reorder.Item
       value={task}
-      className={`group flex items-center gap-3 px-4 py-3.5 rounded-2xl border-l-4 ${borderColor} ${rowBg} shadow-sm hover:shadow-md transition-all`}
+      dragListener={false}
+      dragControls={dragControls}
+      className={`group flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 sm:py-3.5 rounded-2xl border-l-4 ${borderColor} ${rowBg} shadow-sm hover:shadow-md transition-shadow cursor-default select-none`}
+      whileDrag={{
+        scale: 1.02,
+        boxShadow: '0 16px 40px rgba(0,0,0,0.15)',
+        opacity: 0.95,
+        zIndex: 50,
+      }}
     >
-      {/* Drag handle */}
-      <div className="flex-shrink-0 text-gray-300 dark:text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity" title="Drag to reorder">
-        <GripVertical size={15} />
+      {/* Drag handle — only this initiates drag */}
+      <div
+        onPointerDown={(e) => {
+          e.preventDefault()
+          dragControls.start(e)
+        }}
+        className="flex-shrink-0 text-gray-300 dark:text-gray-700 hover:text-orange-400 dark:hover:text-orange-500 cursor-grab active:cursor-grabbing touch-none transition-colors p-0.5 -ml-0.5 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20"
+        title="Drag to reorder"
+      >
+        <GripVertical size={16} />
       </div>
 
       {/* Checkbox */}
-      <button onClick={() => toggleComplete(task._id)}
-        className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+      <button
+        onClick={() => toggleComplete(task._id)}
+        className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all active:scale-90 ${
           task.status === 'Completed' ? 'bg-green-500 border-green-500 text-white shadow-md shadow-green-200 dark:shadow-green-900/30'
           : task.status === 'Missed'  ? 'bg-red-400 border-red-400 text-white'
           : 'border-gray-300 dark:border-gray-600 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20'
-        }`}>
+        }`}
+      >
         {task.status === 'Completed' && <Check size={12} strokeWidth={3} />}
         {task.status === 'Missed'    && <X size={12} strokeWidth={3} />}
       </button>
@@ -243,11 +263,11 @@ function TaskRow({ task, showDate = false }) {
         <p className={`text-sm font-semibold text-gray-900 dark:text-white truncate ${task.status !== 'Pending' ? 'line-through opacity-40' : ''}`}>
           {task.title}
         </p>
-        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-          <span className={`text-xs px-2 py-0.5 rounded-lg font-semibold ${catCfg.color}`}>{catCfg.icon} {task.category}</span>
-          {task.time && <span className="flex items-center gap-1 text-xs text-gray-400"><Clock size={10} />{task.time}</span>}
+        <div className="flex items-center gap-1 sm:gap-1.5 mt-1 flex-wrap">
+          <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-lg font-semibold ${catCfg.color}`}>{catCfg.icon} <span className="hidden sm:inline">{task.category}</span></span>
+          {task.time && <span className="flex items-center gap-0.5 text-xs text-gray-400"><Clock size={10} />{task.time}</span>}
           {showDate && (
-            <span className="flex items-center gap-1 text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-lg">
+            <span className="flex items-center gap-1 text-xs text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 sm:px-2 py-0.5 rounded-lg">
               <CalendarDays size={10} />
               {isToday(new Date(task.date + 'T00:00'))     ? 'Today'
               : isTomorrow(new Date(task.date + 'T00:00')) ? 'Tomorrow'
@@ -256,39 +276,48 @@ function TaskRow({ task, showDate = false }) {
             </span>
           )}
           {task.status === 'Missed' && (
-            <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-2 py-0.5 rounded-lg font-semibold">✗ Missed</span>
+            <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-500 px-1.5 sm:px-2 py-0.5 rounded-lg font-semibold">✗ Missed</span>
           )}
           {task.recurrence && task.recurrence !== 'None' && (
-            <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-500 px-2 py-0.5 rounded-lg font-medium">↻ {task.recurrence}</span>
+            <span className="text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-500 px-1.5 sm:px-2 py-0.5 rounded-lg font-medium">↻ {task.recurrence}</span>
           )}
         </div>
       </div>
 
-      {/* Priority badge */}
-      <div className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold border ${priCfg.badge}`}>
-        {priCfg.dot} {task.priority}
+      {/* Priority badge — hidden on very small screens */}
+      <div className={`hidden sm:flex flex-shrink-0 items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl text-xs font-bold border ${priCfg.badge}`}>
+        {priCfg.dot} <span className="hidden md:inline">{task.priority}</span>
       </div>
+      {/* Priority dot only on mobile */}
+      <div className="flex sm:hidden flex-shrink-0 text-base">{priCfg.dot}</div>
 
       {/* Actions */}
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex-shrink-0">
         <div className="relative">
-          <button onClick={() => setShowDatePicker(v => !v)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-orange-500 transition-colors" title="Reschedule">
+          <button
+            onClick={() => setShowDatePicker(v => !v)}
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-orange-500 transition-colors"
+            title="Reschedule"
+          >
             <CalendarDays size={14} />
           </button>
           <AnimatePresence>
             {showDatePicker && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowDatePicker(false)} />
-                <motion.div initial={{ opacity: 0, y: -6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-                  className="absolute right-0 top-9 z-50 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 p-4 w-52">
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="absolute right-0 top-9 z-50 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 p-4 w-52"
+                >
                   <p className="text-xs font-bold text-gray-500 mb-2.5 uppercase tracking-wider">Move task to</p>
                   <div className="flex flex-col gap-1.5 mb-3">
                     {[
-                      { label: '📅 Today',      date: format(new Date(), 'yyyy-MM-dd') },
-                      { label: '⏭ Tomorrow',   date: format(addDays(new Date(), 1), 'yyyy-MM-dd') },
-                      { label: '📆 In 2 days',  date: format(addDays(new Date(), 2), 'yyyy-MM-dd') },
-                      { label: '📆 In 3 days',  date: format(addDays(new Date(), 3), 'yyyy-MM-dd') },
+                      { label: '📅 Today',     date: format(new Date(), 'yyyy-MM-dd') },
+                      { label: '⏭ Tomorrow',  date: format(addDays(new Date(), 1), 'yyyy-MM-dd') },
+                      { label: '📆 In 2 days', date: format(addDays(new Date(), 2), 'yyyy-MM-dd') },
+                      { label: '📆 In 3 days', date: format(addDays(new Date(), 3), 'yyyy-MM-dd') },
                     ].map(({ label, date }) => (
                       <button key={date} onClick={() => updateTask(task._id, { date }).then(() => setShowDatePicker(false))}
                         className="w-full text-left text-xs py-2 px-3 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 hover:text-orange-600 transition-colors font-medium">
@@ -322,6 +351,38 @@ function TaskRow({ task, showDate = false }) {
   )
 }
 
+// ── Draggable Section ──────────────────────────────────────
+function DraggableSection({ tasks }) {
+  const [items, setItems] = useState(tasks)
+  const isDragging = useRef(false)
+
+  // Only sync from props when we're NOT mid-drag
+  useEffect(() => {
+    if (!isDragging.current) {
+      setItems(tasks)
+    }
+  }, [tasks])
+
+  return (
+    <Reorder.Group
+      axis="y"
+      values={items}
+      onReorder={(newOrder) => {
+        isDragging.current = true
+        setItems(newOrder)
+        // Reset drag flag after framer-motion settles
+        setTimeout(() => { isDragging.current = false }, 300)
+      }}
+      className="space-y-2"
+      style={{ listStyle: 'none', padding: 0, margin: 0 }}
+    >
+      {items.map(task => (
+        <TaskRow key={task._id} task={task} />
+      ))}
+    </Reorder.Group>
+  )
+}
+
 // ── Section Header ─────────────────────────────────────────
 function SectionHeader({ title, count, color, accent }) {
   return (
@@ -329,8 +390,8 @@ function SectionHeader({ title, count, color, accent }) {
       <div className={`w-1.5 h-5 rounded-full ${accent}`} />
       <h3 className={`text-xs font-black uppercase tracking-widest ${color}`}>{title}</h3>
       {count > 0 && (
-        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${color} bg-current/10`} style={{ background: 'currentColor', opacity: 1 }}>
-          <span className="bg-white dark:bg-gray-950 px-1.5 py-0.5 rounded-full">{count}</span>
+        <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400`}>
+          {count}
         </span>
       )}
       <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
@@ -363,19 +424,19 @@ export default function TodayView() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto w-full pb-16">
+    <div className="max-w-2xl mx-auto w-full pb-16 px-1 sm:px-0">
 
       {/* ── Hero ─────────────────────────────────────── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mb-8 pt-1">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <p className="text-sm text-gray-400 font-medium mb-1">
+        <div className="flex items-start justify-between gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs sm:text-sm text-gray-400 font-medium mb-1">
               {format(new Date(), 'EEEE, MMMM d, yyyy')}
             </p>
-            <h1 className="text-4xl font-black text-gray-900 dark:text-white leading-tight" style={{ fontFamily: 'Syne, sans-serif' }}>
+            <h1 className="text-3xl sm:text-4xl font-black text-gray-900 dark:text-white leading-tight" style={{ fontFamily: 'Syne, sans-serif' }}>
               {greeting()} 👋
             </h1>
-            <p className="text-gray-500 dark:text-gray-400 mt-1.5 text-sm">
+            <p className="text-gray-500 dark:text-gray-400 mt-1.5 text-xs sm:text-sm">
               {pending.length === 0 && todayAll.length > 0
                 ? 'All done for today! Amazing work 🎉'
                 : pending.length === 0
@@ -384,17 +445,17 @@ export default function TodayView() {
             </p>
 
             {todayAll.length > 0 && (
-              <div className="mt-5">
+              <div className="mt-4 sm:mt-5">
                 <div className="flex items-center justify-between text-xs mb-1.5">
                   <span className="text-gray-400 font-medium">Today's progress</span>
                   <span className="font-bold text-gray-700 dark:text-gray-300">{completionPct}%</span>
                 </div>
-                <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-2.5 sm:h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                   <motion.div className="h-full rounded-full bg-gradient-to-r from-orange-400 to-orange-500"
                     initial={{ width: 0 }} animate={{ width: `${completionPct}%` }}
                     transition={{ duration: 0.9, delay: 0.2, ease: 'easeOut' }} />
                 </div>
-                <div className="flex items-center gap-4 mt-2 text-xs">
+                <div className="flex items-center gap-3 sm:gap-4 mt-2 text-xs flex-wrap">
                   <span className="flex items-center gap-1 text-green-500 font-semibold"><Check size={11} strokeWidth={3} /> {completed.length} done</span>
                   <span className="flex items-center gap-1 text-orange-400 font-semibold">○ {pending.length} left</span>
                   {missed.length > 0 && <span className="flex items-center gap-1 text-red-400 font-semibold"><X size={11} strokeWidth={3} /> {missed.length} missed</span>}
@@ -403,13 +464,13 @@ export default function TodayView() {
             )}
           </div>
 
-          <div className="flex flex-col items-end gap-3 flex-shrink-0">
+          <div className="flex flex-col items-end gap-2 sm:gap-3 flex-shrink-0">
             {streak > 0 && (
               <motion.div animate={{ scale: [1, 1.04, 1] }} transition={{ repeat: Infinity, duration: 3 }}
-                className="flex flex-col items-center px-4 py-3 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl text-white shadow-lg shadow-orange-200 dark:shadow-orange-900/30">
-                <Flame size={20} />
-                <span className="text-2xl font-black leading-none mt-0.5" style={{ fontFamily: 'Syne, sans-serif' }}>{streak}</span>
-                <span className="text-xs text-orange-200 mt-0.5">day streak</span>
+                className="flex flex-col items-center px-3 sm:px-4 py-2 sm:py-3 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl text-white shadow-lg shadow-orange-200 dark:shadow-orange-900/30">
+                <Flame size={18} />
+                <span className="text-xl sm:text-2xl font-black leading-none mt-0.5" style={{ fontFamily: 'Syne, sans-serif' }}>{streak}</span>
+                <span className="text-xs text-orange-200 mt-0.5">streak</span>
               </motion.div>
             )}
             <Legend />
@@ -427,18 +488,14 @@ export default function TodayView() {
           ✓ No pending tasks — you're on top of things!
         </div>
       ) : (
-        <Reorder.Group axis="y" values={pending} onReorder={() => {}} className="space-y-2">
-          {pending.map(task => <TaskRow key={task._id} task={task} />)}
-        </Reorder.Group>
+        <DraggableSection tasks={pending} />
       )}
 
       {/* ── Completed ────────────────────────────────── */}
       {completed.length > 0 && (
         <>
           <SectionHeader title="Completed" count={completed.length} color="text-green-500" accent="bg-green-400" />
-          <Reorder.Group axis="y" values={completed} onReorder={() => {}} className="space-y-2">
-            {completed.map(task => <TaskRow key={task._id} task={task} />)}
-          </Reorder.Group>
+          <DraggableSection tasks={completed} />
         </>
       )}
 
@@ -446,18 +503,16 @@ export default function TodayView() {
       {missed.length > 0 && (
         <>
           <SectionHeader title="Missed" count={missed.length} color="text-red-400" accent="bg-red-400" />
-          <Reorder.Group axis="y" values={missed} onReorder={() => {}} className="space-y-2">
-            {missed.map(task => <TaskRow key={task._id} task={task} />)}
-          </Reorder.Group>
+          <DraggableSection tasks={missed} />
         </>
       )}
 
       {/* ── Empty state ──────────────────────────────── */}
       {todayAll.length === 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-20">
-          <div className="text-7xl mb-4">📋</div>
-          <p className="text-gray-500 dark:text-gray-400 font-semibold text-lg">Nothing planned for today</p>
-          <p className="text-sm text-gray-400 dark:text-gray-600 mt-1">Click the bar above or press Q to get started</p>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16 sm:py-20">
+          <div className="text-6xl sm:text-7xl mb-4">📋</div>
+          <p className="text-gray-500 dark:text-gray-400 font-semibold text-base sm:text-lg">Nothing planned for today</p>
+          <p className="text-xs sm:text-sm text-gray-400 dark:text-gray-600 mt-1">Click the bar above or press Q to get started</p>
         </motion.div>
       )}
 
@@ -473,7 +528,7 @@ export default function TodayView() {
 
       {/* ── Weekly planner link ───────────────────────── */}
       <motion.button whileHover={{ x: 3 }} onClick={() => setActiveView('weekly')}
-        className="mt-8 w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 text-sm text-gray-400 hover:text-orange-500 hover:border-orange-300 dark:hover:border-orange-800 transition-all font-medium">
+        className="mt-8 w-full flex items-center justify-center gap-2 py-3 sm:py-3.5 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 text-xs sm:text-sm text-gray-400 hover:text-orange-500 hover:border-orange-300 dark:hover:border-orange-800 transition-all font-medium">
         Open full weekly planner <ChevronRight size={16} />
       </motion.button>
     </div>
