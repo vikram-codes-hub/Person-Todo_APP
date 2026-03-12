@@ -18,11 +18,23 @@ connectDB();
 
 // ── Security Middleware ───────────────────────────────────
 app.use(helmet());
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+const corsOptions = {
+  origin: function (origin, callback) {
+    const allowed = [
+      process.env.FRONTEND_URL,
+      /https:\/\/taskflow-frontend.*\.vercel\.app$/
+    ];
+    const isAllowed = allowed.some(o =>
+      typeof o === 'string' ? o === origin : o.test(origin)
+    );
+    if (!origin || isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+};
 
 // ── General Middleware ────────────────────────────────────
 app.use(express.json({ limit: '10kb' }));
