@@ -1,11 +1,10 @@
 const Task = require('../models/Task');
 
 // ── GET /api/tasks ─────────────────────────────────────────
-// Supports query filters: status, category, priority, search, startDate, endDate
 const getAllTasks = async (req, res) => {
   try {
     const { status, category, priority, search, startDate, endDate } = req.query;
-    const filter = {};
+    const filter = { userId: req.user._id };
 
     if (status)   filter.status   = status;
     if (category) filter.category = category;
@@ -28,7 +27,7 @@ const getAllTasks = async (req, res) => {
 // ── GET /api/tasks/:id ─────────────────────────────────────
 const getTaskById = async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
+    const task = await Task.findOne({ _id: req.params.id, userId: req.user._id });
     if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
     res.json({ success: true, data: task });
   } catch (err) {
@@ -39,7 +38,7 @@ const getTaskById = async (req, res) => {
 // ── POST /api/tasks ────────────────────────────────────────
 const createTask = async (req, res) => {
   try {
-    const task = await Task.create(req.body);
+    const task = await Task.create({ ...req.body, userId: req.user._id });
     res.status(201).json({ success: true, data: task });
   } catch (err) {
     if (err.name === 'ValidationError') {
@@ -53,8 +52,8 @@ const createTask = async (req, res) => {
 // ── PUT /api/tasks/:id ─────────────────────────────────────
 const updateTask = async (req, res) => {
   try {
-    const task = await Task.findByIdAndUpdate(
-      req.params.id,
+    const task = await Task.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
       req.body,
       { new: true, runValidators: true }
     );
@@ -77,8 +76,8 @@ const updateStatus = async (req, res) => {
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, error: `Status must be one of: ${validStatuses.join(', ')}` });
     }
-    const task = await Task.findByIdAndUpdate(
-      req.params.id,
+    const task = await Task.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
       { status },
       { new: true }
     );
@@ -92,7 +91,7 @@ const updateStatus = async (req, res) => {
 // ── DELETE /api/tasks/:id ──────────────────────────────────
 const deleteTask = async (req, res) => {
   try {
-    const task = await Task.findByIdAndDelete(req.params.id);
+    const task = await Task.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
     if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
     res.json({ success: true, message: 'Task deleted successfully' });
   } catch (err) {
@@ -103,16 +102,19 @@ const deleteTask = async (req, res) => {
 // ── GET /api/tasks/stats/summary ───────────────────────────
 const getStats = async (req, res) => {
   try {
+    const userId = req.user._id;
     const [total, completed, pending, missed, byCategory, byPriority] = await Promise.all([
-      Task.countDocuments(),
-      Task.countDocuments({ status: 'Completed' }),
-      Task.countDocuments({ status: 'Pending' }),
-      Task.countDocuments({ status: 'Missed' }),
+      Task.countDocuments({ userId }),
+      Task.countDocuments({ userId, status: 'Completed' }),
+      Task.countDocuments({ userId, status: 'Pending'   }),
+      Task.countDocuments({ userId, status: 'Missed'    }),
       Task.aggregate([
+        { $match: { userId } },
         { $group: { _id: '$category', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
+        { $sort:  { count: -1 } },
       ]),
       Task.aggregate([
+        { $match: { userId } },
         { $group: { _id: '$priority', count: { $sum: 1 } } },
       ]),
     ]);
@@ -127,12 +129,11 @@ const getStats = async (req, res) => {
 };
 
 // ── PATCH /api/tasks/auto-miss ─────────────────────────────
-// Marks all overdue Pending tasks as Missed
 const autoMarkMissed = async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0];
     const result = await Task.updateMany(
-      { status: 'Pending', date: { $lt: today } },
+      { userId: req.user._id, status: 'Pending', date: { $lt: today } },
       { $set: { status: 'Missed' } }
     );
     res.json({ success: true, updated: result.modifiedCount });

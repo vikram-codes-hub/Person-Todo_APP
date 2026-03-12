@@ -1,13 +1,15 @@
 require('dotenv').config();
 
-const express    = require('express');
-const cors       = require('cors');
-const helmet     = require('helmet');
-const morgan     = require('morgan');
-const rateLimit  = require('express-rate-limit');
+const express   = require('express');
+const cors      = require('cors');
+const helmet    = require('helmet');
+const morgan    = require('morgan');
+const rateLimit = require('express-rate-limit');
 
 const connectDB                  = require('./config/db');
 const taskRoutes                 = require('./routes/task.routes');
+const authRoutes                 = require('./routes/auth.routes');
+const protect                    = require('./middleware/protect');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 const app  = express();
@@ -17,7 +19,6 @@ const PORT = process.env.PORT || 5000;
 connectDB();
 
 // ── Security Middleware ───────────────────────────────────
-app.use(helmet());
 app.use(helmet());
 const corsOptions = {
   origin: function (origin, callback) {
@@ -37,6 +38,7 @@ const corsOptions = {
   credentials: true
 };
 app.use(cors(corsOptions));
+
 // ── General Middleware ────────────────────────────────────
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false }));
@@ -45,22 +47,23 @@ app.use(morgan('dev'));
 // ── Rate Limiting — 300 requests per 15 minutes ───────────
 app.use('/api', rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
-  message: { success: false, error: 'Too many requests, please slow down.' },
+  max:      300,
+  message:  { success: false, error: 'Too many requests, please slow down.' },
 }));
 
 // ── Health Check ──────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({
-    success: true,
-    message: 'TaskFlow API is running',
+    success:     true,
+    message:     'TaskFlow API is running',
     environment: process.env.NODE_ENV,
-    timestamp: new Date().toISOString(),
+    timestamp:   new Date().toISOString(),
   });
 });
 
 // ── API Routes ────────────────────────────────────────────
-app.use('/api/tasks', taskRoutes);
+app.use('/api/auth',  authRoutes);               // public  — login / register
+app.use('/api/tasks', protect, taskRoutes);      // private — requires JWT token
 
 // ── Error Handling ────────────────────────────────────────
 app.use(notFound);
