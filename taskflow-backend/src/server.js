@@ -18,6 +18,7 @@ connectDB();
 
 // ── Security Middleware ───────────────────────────────────
 app.use(helmet());
+app.use(helmet());
 const corsOptions = {
   origin: function (origin, callback) {
     const allowed = [
@@ -35,7 +36,7 @@ const corsOptions = {
   },
   credentials: true
 };
-
+app.use(cors(corsOptions));
 // ── General Middleware ────────────────────────────────────
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false }));
