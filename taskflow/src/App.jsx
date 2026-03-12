@@ -9,7 +9,7 @@ import CalendarView from './components/CalendarView'
 import StatsView    from './components/StatsView'
 import SearchPanel  from './components/SearchPanel'
 import { Confetti, Notification } from './components/Overlays'
-import AuthPage     from './pages/AuthPage'
+import AuthPage from './Pages/AuthPage.jsx'
 
 const VIEWS = [
   { id: 'today',    label: 'Today',    icon: Home       },
